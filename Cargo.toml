@@ -1,7 +1,15 @@
 [package]
-name = "mns"
+name = "aliyun-mns"
 version = "0.1.0"
 edition = "2021"
+description = "Aliyun MNS SDK for Rust"
+license = "MIT"
+repository = "https://github.com/hjin-me/aliyun-mns-rs"
+authors = ["HJin"]
+keywords = ["aliyun", "mns"]
+
+[lib]
+name = "mns"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,3 +25,4 @@ serde-xml-rs = "0.6.0"
 sha1 = "0.10.5"
 time = { version = "0.3.17", features = ["formatting", "parsing", "serde", "macros"] }
 tokio = { version = "1.25.0", features = ["full"] }
+
