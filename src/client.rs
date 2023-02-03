@@ -3,7 +3,7 @@ use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use hmac::{Hmac, Mac};
 use md5::{Digest, Md5};
-use reqwest::Method;
+use reqwest::{Method, StatusCode};
 use sha1::Sha1;
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ impl Client {
                          resource: &str,
                          method: &str,
                          content_type: &str,
-                         body: &str) -> Result<()> {
+                         body: &str) -> Result<(StatusCode, Vec<u8>)> {
         let body = body.clone();
         let client = reqwest::Client::new();
         let date = gmt_now()?;
@@ -51,18 +51,12 @@ impl Client {
             .header("Date", date)
             .header("Authorization", format!("MNS {}:{}", self.id, s))
             .header("Content-Type", content_type)
-            .header("Content-md5", m)
+            .header("Content-Md5", m)
             .header("x-mns-version", "2015-06-06")
             .timeout(std::time::Duration::from_secs(5))
             .body(body.to_string()).send().await?;
 
-        if res.status().is_success() {
-            dbg!(String::from_utf8_lossy(res.bytes().await?.as_ref()));
-            Ok(())
-        } else {
-            let s = String::from_utf8_lossy(res.bytes().await?.as_ref()).to_string();
-            Err(anyhow::anyhow!("send msg failed: {}", s))
-        }
+        Ok((res.status(), res.bytes().await?.as_ref().to_vec()))
     }
 }
 
@@ -149,7 +143,7 @@ Thu, 02 Feb 2023 02:09:48 GMT
         let conf = dbg!(get_conf());
 
         let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), conf.sec.as_str());
-        c.request(
+        let (status_code, r) = c.request(
             &format!("/queues/{}/messages", conf.queue),
             "POST",
             "application/xml",
@@ -157,6 +151,8 @@ Thu, 02 Feb 2023 02:09:48 GMT
         )
             .await
             .unwrap();
+        dbg!(status_code);
+        dbg!(String::from_utf8_lossy(r.as_slice()));
     }
 
     #[test]
