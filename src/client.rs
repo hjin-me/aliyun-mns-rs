@@ -75,12 +75,10 @@ fn req_sign(
 }
 
 fn sign<S: Into<String>>(key: S, body: &str) -> Result<String> {
-    dbg!(body);
     let mut mac = Hmac::<Sha1>::new_from_slice(key.into().as_bytes())?;
     mac.update(body.as_bytes());
     let result = mac.finalize();
     let s = STANDARD.encode(result.into_bytes());
-    dbg!(s.clone());
     Ok(s)
 }
 

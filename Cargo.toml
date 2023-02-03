@@ -1,6 +1,6 @@
 [package]
 name = "aliyun-mns"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Aliyun MNS SDK for Rust"
 license = "MIT"

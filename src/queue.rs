@@ -45,7 +45,7 @@ pub struct MessageSendResponse {
     message_body_md5: String,
     // ReceiptHandle is assigned when any DelayMessage is sent
     #[serde(rename = "ReceiptHandle")]
-    receipt_handle: String,
+    receipt_handle: Option<String>,
 }
 
 impl Queue {
