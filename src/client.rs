@@ -40,7 +40,7 @@ impl Client {
 
         let s = req_sign(
             &self.sec,
-            "POST".to_string(),
+            method.to_string(),
             m.to_string(),
             date.clone(),
             resource.to_string(),
@@ -133,7 +133,18 @@ Thu, 02 Feb 2023 02:09:48 GMT
             "/queues/market-process-log/messages".to_string(),
         )
             .unwrap();
-        assert_eq!("6nhdhorU7xdV6x+P1Tmzyi6A6KY=", r)
+        assert_eq!("6nhdhorU7xdV6x+P1Tmzyi6A6KY=", r);
+
+
+        let r = req_sign(
+            "t5I8e",
+            "GET".to_string(),
+            "ZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U=".to_string(),
+            "Wed, 08 Feb 2023 09:36:03 GMT".to_string(),
+            "/queues/market-process-log/messages?waitseconds=30".to_string(),
+        )
+            .unwrap();
+        assert_eq!("zVO3Buq0YfEW1yLI0SXOaO6guq8=", r);
     }
 
     #[tokio::test]
@@ -164,6 +175,14 @@ Thu, 02 Feb 2023 02:09:48 GMT
         // assert_eq!(raw, b);
         // let a = STANDARD.encode(raw.as_ref());
         // assert_eq!(a, "YTM5OGY1YmYxODRkY2M0YmM1NjU5OGYzYTJkMDMyZGQ=")
+
+
+        let mut hasher = Md5::new();
+        hasher.update("".as_bytes());
+        let r = hasher.finalize();
+        let mut buf = [0u8; 32];
+        let m = dbg!(base16ct::lower::encode_str(r.as_slice(), &mut buf).unwrap());
+        assert_eq!("ZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U=", dbg!(STANDARD.encode(m)));
     }
 
     #[test]

@@ -12,11 +12,11 @@ pub struct Queue {
 #[serde(rename = "Message")]
 pub struct MessageSendRequest {
     #[serde(rename = "MessageBody")]
-    message_body: String,
+    pub message_body: String,
     #[serde(rename = "DelaySeconds")]
-    delay_seconds: u32,
+    pub delay_seconds: u32,
     #[serde(rename = "Priority")]
-    priority: u8,
+    pub priority: u8,
     // XMLName      xml.Name `xml:"Message" json:"-"`
     // MessageBody  string   `xml:"MessageBody" json:"message_body"`
     // DelaySeconds int64    `xml:"DelaySeconds" json:"delay_seconds"`
@@ -24,28 +24,51 @@ pub struct MessageSendRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "Message")]
+pub struct MessageReceiveResponse {
+    #[serde(rename = "MessageId")]
+    pub message_id: String,
+    #[serde(rename = "ReceiptHandle")]
+    pub receipt_handle: String,
+    #[serde(rename = "MessageBodyMD5")]
+    pub message_body_md5: String,
+    #[serde(rename = "MessageBody")]
+    pub message_body: String,
+    #[serde(rename = "EnqueueTime")]
+    pub enqueue_time: i64,
+    #[serde(rename = "NextVisibleTime")]
+    pub next_visible_time: i64,
+    #[serde(rename = "FirstDequeueTime")]
+    pub first_dequeue_time: i64,
+    #[serde(rename = "DequeueCount")]
+    pub dequeue_count: i64,
+    #[serde(rename = "Priority")]
+    pub priority: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Error")]
 pub struct ErrorResponse {
     #[serde(rename = "Code")]
-    code: String,
+    pub code: String,
     #[serde(rename = "RequestId")]
-    request_id: String,
+    pub request_id: String,
     #[serde(rename = "HostId")]
-    host_id: String,
+    pub host_id: String,
     #[serde(rename = "Message")]
-    message: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendResponse {
     #[serde(rename = "MessageId")]
-    message_id: String,
+    pub message_id: String,
     #[serde(rename = "MessageBodyMD5")]
-    message_body_md5: String,
+    pub message_body_md5: String,
     // ReceiptHandle is assigned when any DelayMessage is sent
     #[serde(rename = "ReceiptHandle")]
-    receipt_handle: Option<String>,
+    pub receipt_handle: Option<String>,
 }
 
 impl Queue {
@@ -72,6 +95,38 @@ impl Queue {
         if status_code.is_success() {
             let res: MessageSendResponse = serde_xml_rs::from_reader(v.as_slice())?;
             Ok(res)
+        } else {
+            let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+        }
+    }
+    pub async fn receive_msg(&self, wait_seconds: Option<i32>) -> Result<MessageReceiveResponse> {
+        let resource = wait_seconds.map_or_else(|| format!("/queues/{}/messages", self.name), |w| format!("/queues/{}/messages?waitseconds={}", self.name, w));
+        let (status_code, v) = self.client.request(
+            &resource,
+            "GET",
+            "application/xml",
+            "",
+        )
+            .await?;
+        if status_code.is_success() {
+            let res: MessageReceiveResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            Ok(res)
+        } else {
+            let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+        }
+    }
+    pub async fn delete_msg(&self, receipt_handle: &str) -> Result<()> {
+        let (status_code, v) = self.client.request(
+            &format!("/queues/{}/messages?ReceiptHandle={}", self.name, receipt_handle),
+            "DELETE",
+            "application/xml",
+            "",
+        )
+            .await?;
+        if status_code.is_success() {
+            Ok(())
         } else {
             let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
             Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
@@ -121,6 +176,16 @@ mod test {
         let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), conf.sec.as_str());
         let q = Queue::new(conf.queue.as_str(), &c);
         let r = q.send_msg("aa", Some(1), Some(8)).await.unwrap();
+        dbg!(r);
+    }
+
+    #[tokio::test]
+    async fn test_recv_msg() {
+        let conf = dbg!(get_conf());
+
+        let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), conf.sec.as_str());
+        let q = Queue::new(conf.queue.as_str(), &c);
+        let r = q.receive_msg(Some(10)).await.unwrap();
         dbg!(r);
     }
 }

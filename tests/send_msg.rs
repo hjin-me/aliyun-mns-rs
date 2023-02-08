@@ -10,8 +10,9 @@ async fn test_send_msg() {
 
     let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), conf.sec.as_str());
     let q = Queue::new(conf.queue.as_str(), &c);
-    let r = q.send_msg("aa", Some(1), Some(8)).await.unwrap();
-    dbg!(r);
+    let r = dbg!(q.send_msg("aa", Some(1), Some(8)).await.unwrap());
+    dbg!(q.delete_msg(r.receipt_handle.unwrap().as_str()).await.unwrap());
+
     let r = q.send_msg("aa", None, None).await.unwrap();
     dbg!(r);
 }
