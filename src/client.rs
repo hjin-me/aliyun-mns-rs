@@ -11,6 +11,7 @@ pub struct Client {
     endpoint: String,
     id: String,
     sec: String,
+    client: reqwest::Client,
 }
 
 impl Client {
@@ -19,6 +20,7 @@ impl Client {
             endpoint: endpoint.to_string(),
             id: id.to_string(),
             sec: sec.to_string(),
+            client: reqwest::Client::new(),
         }
     }
     pub async fn request(&self,
@@ -27,7 +29,6 @@ impl Client {
                          content_type: &str,
                          body: &str) -> Result<(StatusCode, Vec<u8>)> {
         let body = body.clone();
-        let client = reqwest::Client::new();
         let date = gmt_now()?;
         let m = {
             let mut hasher = Md5::new();
@@ -46,7 +47,7 @@ impl Client {
             resource.to_string(),
         )?;
 
-        let res = client
+        let res = self.client
             .request(Method::from_str(method)?, format!("{}{}", self.endpoint, resource).as_str())
             .header("Date", date)
             .header("Authorization", format!("MNS {}:{}", self.id, s))
