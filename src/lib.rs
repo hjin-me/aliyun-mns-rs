@@ -1,5 +1,4 @@
 pub mod client;
-pub mod conf;
 pub mod error;
 pub mod queue;
 

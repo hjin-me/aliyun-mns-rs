@@ -5,7 +5,6 @@ pub struct Config {
     pub sec: String,
     pub queue: String,
 }
-
 pub fn get_conf() -> Config {
     Config {
         endpoint: env!("MNS_ENDPOINT").to_string(),

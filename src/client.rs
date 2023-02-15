@@ -30,7 +30,6 @@ impl Client {
         content_type: &str,
         body: &str,
     ) -> Result<(StatusCode, Vec<u8>)> {
-        let body = body.clone();
         let date = gmt_now()?;
         let m = {
             let mut hasher = Md5::new();
@@ -77,8 +76,7 @@ fn req_sign(
     resource: String,
 ) -> Result<String> {
     let s = format!(
-        "{}\n{}\napplication/xml\n{}\nx-mns-version:2015-06-06\n{}",
-        method, lower_md5_base64, date, resource
+        "{method}\n{lower_md5_base64}\napplication/xml\n{date}\nx-mns-version:2015-06-06\n{resource}"
     );
     sign(sk, s.as_str())
 }
@@ -94,7 +92,7 @@ fn sign<S: Into<String>>(key: S, body: &str) -> Result<String> {
 fn gmt_now() -> Result<String> {
     Ok(time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc2822)?
-        .splitn(2, "+0")
+        .split("+0")
         .next()
         .unwrap()
         .to_string()
@@ -104,7 +102,6 @@ fn gmt_now() -> Result<String> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::conf::get_conf;
     use crate::error::Error;
     use crate::error::Error::MNSSignatureDoesNotMatch;
     use crate::queue::ErrorResponse;
@@ -145,11 +142,9 @@ Thu, 02 Feb 2023 02:09:48 GMT
 
     #[tokio::test]
     async fn test_sign_req() {
-        let conf = dbg!(get_conf());
-
-        let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), "wrong sec");
+        let c = Client::new(env!("MNS_ENDPOINT"), env!("MNS_ID"), env!("MNS_SEC"));
         let (status_code, r) = c.request(
-            &format!("/queues/{}/messages", conf.queue),
+            &format!("/queues/{}/messages", env!("MNS_QUEUE")),
             "POST",
             "application/xml",
             &"<Message><MessageBody>hello &lt;&#34;aliyun-mns-go-sdk&#34;&gt;</MessageBody><DelaySeconds>0</DelaySeconds><Priority>8</Priority></Message>",
@@ -190,6 +185,6 @@ Thu, 02 Feb 2023 02:09:48 GMT
 
     #[test]
     fn test_gmt() {
-        gmt_now().unwrap();
+        dbg!(gmt_now().unwrap());
     }
 }

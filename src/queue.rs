@@ -12,7 +12,7 @@ pub struct Queue {
     client: Client,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendRequest {
     #[serde(rename = "MessageBody")]
@@ -21,10 +21,32 @@ pub struct MessageSendRequest {
     pub delay_seconds: u32,
     #[serde(rename = "Priority")]
     pub priority: u8,
-    // XMLName      xml.Name `xml:"Message" json:"-"`
-    // MessageBody  string   `xml:"MessageBody" json:"message_body"`
-    // DelaySeconds int64    `xml:"DelaySeconds" json:"delay_seconds"`
-    // Priority     int64    `xml:"Priority" json:"priority"`
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "Message")]
+pub struct MessageSendResponse {
+    #[serde(rename = "MessageId")]
+    pub message_id: String,
+    #[serde(rename = "MessageBodyMD5")]
+    pub message_body_md5: String,
+    // ReceiptHandle is assigned when any DelayMessage is sent
+    #[serde(rename = "ReceiptHandle")]
+    pub receipt_handle: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename = "Messages")]
+struct MessageBatchSendRequest {
+    #[serde(rename = "Message")]
+    pub messages: Vec<MessageSendRequest>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename = "Messages")]
+struct MessageBatchSendResponse {
+    #[serde(rename = "Message")]
+    pub messages: Vec<MessageSendResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,18 +104,6 @@ impl Display for ErrorResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename = "Message")]
-pub struct MessageSendResponse {
-    #[serde(rename = "MessageId")]
-    pub message_id: String,
-    #[serde(rename = "MessageBodyMD5")]
-    pub message_body_md5: String,
-    // ReceiptHandle is assigned when any DelayMessage is sent
-    #[serde(rename = "ReceiptHandle")]
-    pub receipt_handle: Option<String>,
-}
-
 impl Queue {
     pub fn new(name: &str, c: &Client) -> Self {
         Self {
@@ -102,17 +112,7 @@ impl Queue {
         }
     }
 
-    pub async fn send_msg(
-        &self,
-        msg_body: &str,
-        delay_secs: Option<u32>,
-        priority: Option<u8>,
-    ) -> Result<MessageSendResponse> {
-        let m = MessageSendRequest {
-            message_body: msg_body.to_string(),
-            delay_seconds: delay_secs.unwrap_or(0),
-            priority: priority.unwrap_or(7) + 1,
-        };
+    pub async fn send_message(&self, m: &MessageSendRequest) -> Result<MessageSendResponse> {
         let (status_code, v) = self
             .client
             .request(
@@ -132,7 +132,35 @@ impl Queue {
             Err(res.into())
         }
     }
-    pub async fn receive_msg(&self, wait_seconds: Option<i32>) -> Result<MessageReceiveResponse> {
+
+    pub async fn batch_send_messages(
+        &self,
+        ms: &Vec<MessageSendRequest>,
+    ) -> Result<Vec<MessageSendResponse>> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!("/queues/{}/messages", self.name),
+                "POST",
+                "application/xml",
+                &serde_xml_rs::to_string(&ms).map_err(SerializeMessageFailed)?,
+            )
+            .await?;
+        if status_code.is_success() {
+            let res: MessageBatchSendResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
+            Ok(res.messages)
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
+
+    pub async fn receive_message(
+        &self,
+        wait_seconds: Option<i32>,
+    ) -> Result<MessageReceiveResponse> {
         let resource = wait_seconds.map_or_else(
             || format!("/queues/{}/messages", self.name),
             |w| format!("/queues/{}/messages?waitseconds={}", self.name, w),
@@ -151,7 +179,7 @@ impl Queue {
             Err(res.into())
         }
     }
-    pub async fn delete_msg(&self, receipt_handle: &str) -> Result<()> {
+    pub async fn delete_message(&self, receipt_handle: &str) -> Result<()> {
         let (status_code, v) = self
             .client
             .request(
@@ -173,7 +201,7 @@ impl Queue {
         }
     }
 
-    pub async fn change_msg_visibility(
+    pub async fn change_message_visibility(
         &self,
         receipt_handle: &str,
         visibility_timeout: i32,
@@ -205,7 +233,6 @@ impl Queue {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::conf::get_conf;
     use serde_xml_rs::to_string;
 
     #[test]
@@ -222,22 +249,25 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_send_msg() {
-        let conf = dbg!(get_conf());
-
-        let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), conf.sec.as_str());
-        let q = Queue::new(conf.queue.as_str(), &c);
-        let r = q.send_msg("aa", Some(1), Some(8)).await.unwrap();
+    async fn test_send_message() {
+        let c = Client::new(env!("MNS_ENDPOINT"), env!("MNS_ID"), env!("MNS_SEC"));
+        let q = Queue::new(env!("MNS_QUEUE"), &c);
+        let r = q
+            .send_message(&MessageSendRequest {
+                message_body: "aa".to_string(),
+                delay_seconds: 1,
+                priority: 9,
+            })
+            .await
+            .unwrap();
         dbg!(r);
     }
 
     #[tokio::test]
-    async fn test_recv_msg() {
-        let conf = dbg!(get_conf());
-
-        let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), conf.sec.as_str());
-        let q = Queue::new(conf.queue.as_str(), &c);
-        let r = q.receive_msg(Some(10)).await.unwrap();
+    async fn test_recv_message() {
+        let c = Client::new(env!("MNS_ENDPOINT"), env!("MNS_ID"), env!("MNS_SEC"));
+        let q = Queue::new(env!("MNS_QUEUE"), &c);
+        let r = q.receive_message(Some(10)).await.unwrap();
         dbg!(r);
     }
 }
