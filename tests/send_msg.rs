@@ -1,8 +1,7 @@
 use mns::client::Client;
+use mns::conf::get_conf;
 use mns::queue::Queue;
-use crate::conf::get_conf;
 
-mod conf;
 
 #[tokio::test]
 async fn test_send_msg() {

@@ -1,5 +1,7 @@
+use std::fmt::Display;
 use crate::client::Client;
 use anyhow::Result;
+use thiserror::Error;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone)]
@@ -47,6 +49,15 @@ pub struct MessageReceiveResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "ChangeVisibility")]
+pub struct MessageVisibilityChangeResponse {
+    #[serde(rename = "ReceiptHandle")]
+    receipt_handle: String,
+    #[serde(rename = "NextVisibleTime")]
+    next_visible_time: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Error")]
 pub struct ErrorResponse {
     #[serde(rename = "Code")]
@@ -59,6 +70,12 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
+impl Display for ErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}, code: {}, request_id: {}, host_id: {}", self.message, self.code, self.request_id, self.host_id)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendResponse {
@@ -69,6 +86,12 @@ pub struct MessageSendResponse {
     // ReceiptHandle is assigned when any DelayMessage is sent
     #[serde(rename = "ReceiptHandle")]
     pub receipt_handle: Option<String>,
+}
+
+#[derive(Error, Debug)]
+pub enum QueueError {
+    #[error("Unknown error: {0}")]
+    Unknown(ErrorResponse),
 }
 
 impl Queue {
@@ -97,7 +120,8 @@ impl Queue {
             Ok(res)
         } else {
             let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
-            Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+            Err(QueueError::Unknown(res).into())
+            // Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
         }
     }
     pub async fn receive_msg(&self, wait_seconds: Option<i32>) -> Result<MessageReceiveResponse> {
@@ -114,7 +138,8 @@ impl Queue {
             Ok(res)
         } else {
             let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
-            Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+            Err(QueueError::Unknown(res).into())
+            // Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
         }
     }
     pub async fn delete_msg(&self, receipt_handle: &str) -> Result<()> {
@@ -129,7 +154,25 @@ impl Queue {
             Ok(())
         } else {
             let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
-            Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+            Err(QueueError::Unknown(res).into())
+            // Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+        }
+    }
+
+    pub async fn change_msg_visibility(&self, receipt_handle: &str, visibility_timeout: i32) -> Result<MessageVisibilityChangeResponse> {
+        let (status_code, v) = self.client.request(
+            &format!("/queues/{}/messages?ReceiptHandle={}&VisibilityTimeout={}", self.name, receipt_handle, visibility_timeout),
+            "PUT",
+            "application/xml",
+            "",
+        )
+            .await?;
+        if status_code.is_success() {
+            let res: MessageVisibilityChangeResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            Ok(res)
+        } else {
+            let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            Err(QueueError::Unknown(res).into())
         }
     }
 }
@@ -137,24 +180,9 @@ impl Queue {
 #[cfg(test)]
 mod test {
     use serde_xml_rs::{to_string};
+    use crate::conf::get_conf;
     use super::*;
 
-    #[derive(Debug, Clone)]
-    struct Config {
-        endpoint: String,
-        id: String,
-        sec: String,
-        queue: String,
-    }
-
-    fn get_conf() -> Config {
-        Config {
-            endpoint: env!("MNS_ENDPOINT").to_string(),
-            id: env!("MNS_ID").to_string(),
-            sec: env!("MNS_SEC").to_string(),
-            queue: env!("MNS_QUEUE").to_string(),
-        }
-    }
 
     #[test]
     fn test_serde() {

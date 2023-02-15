@@ -94,24 +94,9 @@ fn gmt_now() -> Result<String> {
 
 #[cfg(test)]
 mod test {
+    use crate::conf::get_conf;
     use super::*;
 
-    #[derive(Debug, Clone)]
-    struct Config {
-        endpoint: String,
-        id: String,
-        sec: String,
-        queue: String,
-    }
-
-    fn get_conf() -> Config {
-        Config {
-            endpoint: env!("MNS_ENDPOINT").to_string(),
-            id: env!("MNS_ID").to_string(),
-            sec: env!("MNS_SEC").to_string(),
-            queue: env!("MNS_QUEUE").to_string(),
-        }
-    }
 
     #[test]
     fn test_sign() {

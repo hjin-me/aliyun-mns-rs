@@ -24,5 +24,6 @@ reqwest = "0.11.14"
 serde = { version = "1.0.152", features = ["derive"] }
 serde-xml-rs = "0.6.0"
 sha1 = "0.10.5"
+thiserror = "1.0.38"
 time = { version = "0.3.17", features = ["formatting", "parsing", "serde", "macros"] }
 tokio = { version = "1.25.0", features = ["full"] }
