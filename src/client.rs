@@ -1,10 +1,10 @@
-use std::str::FromStr;
 use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use hmac::{Hmac, Mac};
 use md5::{Digest, Md5};
 use reqwest::{Method, StatusCode};
 use sha1::Sha1;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -23,11 +23,13 @@ impl Client {
             client: reqwest::Client::new(),
         }
     }
-    pub async fn request(&self,
-                         resource: &str,
-                         method: &str,
-                         content_type: &str,
-                         body: &str) -> Result<(StatusCode, Vec<u8>)> {
+    pub async fn request(
+        &self,
+        resource: &str,
+        method: &str,
+        content_type: &str,
+        body: &str,
+    ) -> Result<(StatusCode, Vec<u8>)> {
         let body = body.clone();
         let date = gmt_now()?;
         let m = {
@@ -47,15 +49,21 @@ impl Client {
             resource.to_string(),
         )?;
 
-        let res = self.client
-            .request(Method::from_str(method)?, format!("{}{}", self.endpoint, resource).as_str())
+        let res = self
+            .client
+            .request(
+                Method::from_str(method)?,
+                format!("{}{}", self.endpoint, resource).as_str(),
+            )
             .header("Date", date)
             .header("Authorization", format!("MNS {}:{}", self.id, s))
             .header("Content-Type", content_type)
             .header("Content-Md5", m)
             .header("x-mns-version", "2015-06-06")
             .timeout(std::time::Duration::from_secs(5))
-            .body(body.to_string()).send().await?;
+            .body(body.to_string())
+            .send()
+            .await?;
 
         Ok((res.status(), res.bytes().await?.as_ref().to_vec()))
     }
@@ -87,16 +95,19 @@ fn gmt_now() -> Result<String> {
     Ok(time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc2822)?
         .splitn(2, "+0")
-        .next().unwrap()
+        .next()
+        .unwrap()
         .to_string()
         + "GMT")
 }
 
 #[cfg(test)]
 mod test {
-    use crate::conf::get_conf;
     use super::*;
-
+    use crate::conf::get_conf;
+    use crate::error::Error;
+    use crate::error::Error::MNSSignatureDoesNotMatch;
+    use crate::queue::ErrorResponse;
 
     #[test]
     fn test_sign() {
@@ -108,7 +119,7 @@ mod test {
 Thu, 02 Feb 2023 02:09:48 GMT
 /queues/$queueName/messages",
         )
-            .unwrap();
+        .unwrap();
         assert_eq!("pSxntRmmzwO95loQNbiaKzs0fsE=", r);
 
         let r = req_sign(
@@ -118,9 +129,8 @@ Thu, 02 Feb 2023 02:09:48 GMT
             "Thu, 02 Feb 2023 12:27:22 GMT".to_string(),
             "/queues/market-process-log/messages".to_string(),
         )
-            .unwrap();
+        .unwrap();
         assert_eq!("6nhdhorU7xdV6x+P1Tmzyi6A6KY=", r);
-
 
         let r = req_sign(
             "t5I8e",
@@ -129,15 +139,15 @@ Thu, 02 Feb 2023 02:09:48 GMT
             "Wed, 08 Feb 2023 09:36:03 GMT".to_string(),
             "/queues/market-process-log/messages?waitseconds=30".to_string(),
         )
-            .unwrap();
+        .unwrap();
         assert_eq!("zVO3Buq0YfEW1yLI0SXOaO6guq8=", r);
     }
 
     #[tokio::test]
-    async fn test_send_msg() {
+    async fn test_sign_req() {
         let conf = dbg!(get_conf());
 
-        let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), conf.sec.as_str());
+        let c = Client::new(conf.endpoint.as_str(), conf.id.as_str(), "wrong sec");
         let (status_code, r) = c.request(
             &format!("/queues/{}/messages", conf.queue),
             "POST",
@@ -146,8 +156,13 @@ Thu, 02 Feb 2023 02:09:48 GMT
         )
             .await
             .unwrap();
-        dbg!(status_code);
-        dbg!(String::from_utf8_lossy(r.as_slice()));
+        assert_eq!(403, status_code);
+        let s: ErrorResponse = serde_xml_rs::from_reader(r.as_slice()).unwrap();
+        let e = Error::from(s);
+        match e {
+            MNSSignatureDoesNotMatch(_) => (),
+            _ => panic!("wrong error"),
+        }
     }
 
     #[test]
@@ -162,13 +177,15 @@ Thu, 02 Feb 2023 02:09:48 GMT
         // let a = STANDARD.encode(raw.as_ref());
         // assert_eq!(a, "YTM5OGY1YmYxODRkY2M0YmM1NjU5OGYzYTJkMDMyZGQ=")
 
-
         let mut hasher = Md5::new();
         hasher.update("".as_bytes());
         let r = hasher.finalize();
         let mut buf = [0u8; 32];
         let m = dbg!(base16ct::lower::encode_str(r.as_slice(), &mut buf).unwrap());
-        assert_eq!("ZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U=", dbg!(STANDARD.encode(m)));
+        assert_eq!(
+            "ZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U=",
+            dbg!(STANDARD.encode(m))
+        );
     }
 
     #[test]

@@ -1,8 +1,10 @@
-use std::fmt::Display;
 use crate::client::Client;
-use anyhow::Result;
-use thiserror::Error;
-use serde::{Serialize, Deserialize};
+use crate::error::Error::{
+    DeserializeErrorResponseFailed, DeserializeResponseFailed, SerializeMessageFailed,
+};
+use crate::error::Result;
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Debug, Clone)]
 pub struct Queue {
@@ -72,7 +74,11 @@ pub struct ErrorResponse {
 
 impl Display for ErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}, code: {}, request_id: {}, host_id: {}", self.message, self.code, self.request_id, self.host_id)
+        write!(
+            f,
+            "ali mns err, code: {}, message: {}, request_id: {}, host_id: {}",
+            self.code, self.message, self.request_id, self.host_id
+        )
     }
 }
 
@@ -88,12 +94,6 @@ pub struct MessageSendResponse {
     pub receipt_handle: Option<String>,
 }
 
-#[derive(Error, Debug)]
-pub enum QueueError {
-    #[error("Unknown error: {0}")]
-    Unknown(ErrorResponse),
-}
-
 impl Queue {
     pub fn new(name: &str, c: &Client) -> Self {
         Self {
@@ -102,87 +102,111 @@ impl Queue {
         }
     }
 
-    pub async fn send_msg(&self, msg_body: &str, delay_secs: Option<u32>, priority: Option<u8>) -> Result<MessageSendResponse> {
+    pub async fn send_msg(
+        &self,
+        msg_body: &str,
+        delay_secs: Option<u32>,
+        priority: Option<u8>,
+    ) -> Result<MessageSendResponse> {
         let m = MessageSendRequest {
             message_body: msg_body.to_string(),
             delay_seconds: delay_secs.unwrap_or(0),
             priority: priority.unwrap_or(7) + 1,
         };
-        let (status_code, v) = self.client.request(
-            &format!("/queues/{}/messages", self.name),
-            "POST",
-            "application/xml",
-            &serde_xml_rs::to_string(&m).unwrap(),
-        )
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!("/queues/{}/messages", self.name),
+                "POST",
+                "application/xml",
+                &serde_xml_rs::to_string(&m).map_err(SerializeMessageFailed)?,
+            )
             .await?;
         if status_code.is_success() {
-            let res: MessageSendResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            let res: MessageSendResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
             Ok(res)
         } else {
-            let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
-            Err(QueueError::Unknown(res).into())
-            // Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
         }
     }
     pub async fn receive_msg(&self, wait_seconds: Option<i32>) -> Result<MessageReceiveResponse> {
-        let resource = wait_seconds.map_or_else(|| format!("/queues/{}/messages", self.name), |w| format!("/queues/{}/messages?waitseconds={}", self.name, w));
-        let (status_code, v) = self.client.request(
-            &resource,
-            "GET",
-            "application/xml",
-            "",
-        )
+        let resource = wait_seconds.map_or_else(
+            || format!("/queues/{}/messages", self.name),
+            |w| format!("/queues/{}/messages?waitseconds={}", self.name, w),
+        );
+        let (status_code, v) = self
+            .client
+            .request(&resource, "GET", "application/xml", "")
             .await?;
         if status_code.is_success() {
-            let res: MessageReceiveResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            let res: MessageReceiveResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
             Ok(res)
         } else {
-            let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
-            Err(QueueError::Unknown(res).into())
-            // Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
         }
     }
     pub async fn delete_msg(&self, receipt_handle: &str) -> Result<()> {
-        let (status_code, v) = self.client.request(
-            &format!("/queues/{}/messages?ReceiptHandle={}", self.name, receipt_handle),
-            "DELETE",
-            "application/xml",
-            "",
-        )
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!(
+                    "/queues/{}/messages?ReceiptHandle={}",
+                    self.name, receipt_handle
+                ),
+                "DELETE",
+                "application/xml",
+                "",
+            )
             .await?;
         if status_code.is_success() {
             Ok(())
         } else {
-            let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
-            Err(QueueError::Unknown(res).into())
-            // Err(anyhow::anyhow!("[{}]{}[{}]", res.code, res.message, res.request_id))
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
         }
     }
 
-    pub async fn change_msg_visibility(&self, receipt_handle: &str, visibility_timeout: i32) -> Result<MessageVisibilityChangeResponse> {
-        let (status_code, v) = self.client.request(
-            &format!("/queues/{}/messages?ReceiptHandle={}&VisibilityTimeout={}", self.name, receipt_handle, visibility_timeout),
-            "PUT",
-            "application/xml",
-            "",
-        )
+    pub async fn change_msg_visibility(
+        &self,
+        receipt_handle: &str,
+        visibility_timeout: i32,
+    ) -> Result<MessageVisibilityChangeResponse> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!(
+                    "/queues/{}/messages?ReceiptHandle={}&VisibilityTimeout={}",
+                    self.name, receipt_handle, visibility_timeout
+                ),
+                "PUT",
+                "application/xml",
+                "",
+            )
             .await?;
         if status_code.is_success() {
-            let res: MessageVisibilityChangeResponse = serde_xml_rs::from_reader(v.as_slice())?;
+            let res: MessageVisibilityChangeResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
             Ok(res)
         } else {
-            let res: ErrorResponse = serde_xml_rs::from_reader(v.as_slice())?;
-            Err(QueueError::Unknown(res).into())
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use serde_xml_rs::{to_string};
-    use crate::conf::get_conf;
     use super::*;
-
+    use crate::conf::get_conf;
+    use serde_xml_rs::to_string;
 
     #[test]
     fn test_serde() {
