@@ -13,8 +13,8 @@ async fn test_send_msg() {
     let r = dbg!(q
         .send_message(&MessageSendRequest {
             message_body: "aa".to_string(),
-            delay_seconds: 1,
-            priority: 9,
+            delay_seconds: Some(1),
+            priority: Some(9),
         })
         .await
         .unwrap());
@@ -26,8 +26,8 @@ async fn test_send_msg() {
     let r = q
         .send_message(&MessageSendRequest {
             message_body: "aa".to_string(),
-            delay_seconds: 0,
-            priority: 8,
+            delay_seconds: None,
+            priority: None,
         })
         .await
         .unwrap();

@@ -142,9 +142,13 @@ Thu, 02 Feb 2023 02:09:48 GMT
 
     #[tokio::test]
     async fn test_sign_req() {
-        let c = Client::new(env!("MNS_ENDPOINT"), env!("MNS_ID"), env!("MNS_SEC"));
+        let c = Client::new(
+            &std::env::var("MNS_ENDPOINT").unwrap(),
+            &std::env::var("MNS_ID").unwrap(),
+            &std::env::var("MNS_SEC").unwrap(),
+        );
         let (status_code, r) = c.request(
-            &format!("/queues/{}/messages", env!("MNS_QUEUE")),
+            &format!("/queues/{}/messages", std::env::var("MNS_QUEUE").unwrap()),
             "POST",
             "application/xml",
             &"<Message><MessageBody>hello &lt;&#34;aliyun-mns-go-sdk&#34;&gt;</MessageBody><DelaySeconds>0</DelaySeconds><Priority>8</Priority></Message>",

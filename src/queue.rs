@@ -18,9 +18,9 @@ pub struct MessageSendRequest {
     #[serde(rename = "MessageBody")]
     pub message_body: String,
     #[serde(rename = "DelaySeconds")]
-    pub delay_seconds: u32,
+    pub delay_seconds: Option<u32>,
     #[serde(rename = "Priority")]
-    pub priority: u8,
+    pub priority: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,6 +113,11 @@ impl Queue {
     }
 
     pub async fn send_message(&self, m: &MessageSendRequest) -> Result<MessageSendResponse> {
+        let m = MessageSendRequest {
+            message_body: m.message_body.clone(),
+            delay_seconds: m.delay_seconds.or(Some(0)),
+            priority: m.priority.or(Some(8)),
+        };
         let (status_code, v) = self
             .client
             .request(
@@ -241,22 +246,42 @@ mod test {
 
         let m = MessageSendRequest {
             message_body: "aa".to_string(),
-            delay_seconds: 1,
-            priority: 9,
+            delay_seconds: Some(1),
+            priority: Some(9),
         };
+        let reserialized_item = to_string(&m).unwrap();
+        assert_eq!(src, reserialized_item);
+
+        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody>aa</MessageBody><DelaySeconds /><Priority /></Message>"#;
+
+        let m = MessageSendRequest {
+            message_body: "aa".to_string(),
+            delay_seconds: None,
+            priority: None,
+        };
+        let reserialized_item = to_string(&m).unwrap();
+        assert_eq!(src, reserialized_item);
+
+        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody></MessageBody><DelaySeconds /><Priority /></Message>"#;
+
+        let m = MessageSendRequest::default();
         let reserialized_item = to_string(&m).unwrap();
         assert_eq!(src, reserialized_item);
     }
 
     #[tokio::test]
     async fn test_send_message() {
-        let c = Client::new(env!("MNS_ENDPOINT"), env!("MNS_ID"), env!("MNS_SEC"));
-        let q = Queue::new(env!("MNS_QUEUE"), &c);
+        let c = Client::new(
+            &std::env::var("MNS_ENDPOINT").unwrap(),
+            &std::env::var("MNS_ID").unwrap(),
+            &std::env::var("MNS_SEC").unwrap(),
+        );
+        let q = Queue::new(&std::env::var("MNS_QUEUE").unwrap(), &c);
         let r = q
             .send_message(&MessageSendRequest {
                 message_body: "aa".to_string(),
-                delay_seconds: 1,
-                priority: 9,
+                delay_seconds: Some(1),
+                priority: Some(9),
             })
             .await
             .unwrap();
@@ -265,8 +290,12 @@ mod test {
 
     #[tokio::test]
     async fn test_recv_message() {
-        let c = Client::new(env!("MNS_ENDPOINT"), env!("MNS_ID"), env!("MNS_SEC"));
-        let q = Queue::new(env!("MNS_QUEUE"), &c);
+        let c = Client::new(
+            &std::env::var("MNS_ENDPOINT").unwrap(),
+            &std::env::var("MNS_ID").unwrap(),
+            &std::env::var("MNS_SEC").unwrap(),
+        );
+        let q = Queue::new(&std::env::var("MNS_QUEUE").unwrap(), &c);
         let r = q.receive_message(Some(10)).await.unwrap();
         dbg!(r);
     }
