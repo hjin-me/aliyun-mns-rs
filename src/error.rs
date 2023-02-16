@@ -130,6 +130,7 @@ impl From<ErrorResponse> for Error {
     fn from(value: ErrorResponse) -> Self {
         match value.code.as_str() {
             "AccessDenied" => Error::MNSAccessDenied(value),
+            "AccessDeniedByRamPolicy" => Error::MNSAccessDenied(value),
             "InvalidAccessKeyId" => Error::MNSInvalidAccessKeyId(value),
             "InternalError" => Error::MNSInternalError(value),
             "InvalidAuthorizationHeader" => Error::MNSInvalidAuthorizationHeader(value),

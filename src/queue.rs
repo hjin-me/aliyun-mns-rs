@@ -90,6 +90,12 @@ pub struct MessageReceiveResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "Messages")]
+pub struct MessageBatchReceiveResponse {
+    #[serde(rename = "Message")]
+    pub messages: Vec<MessageReceiveResponse>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "ChangeVisibility")]
 pub struct MessageVisibilityChangeResponse {
     #[serde(rename = "ReceiptHandle")]
@@ -115,7 +121,7 @@ impl Display for ErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ali mns err, code: {}, message: {}, request_id: {}, host_id: {}",
+            "mns err, code: {}, message: {}, request_id: {}, host_id: {}",
             self.code, self.message, self.request_id, self.host_id
         )
     }
@@ -190,6 +196,39 @@ impl Queue {
             let res: MessageReceiveResponse =
                 serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
             Ok(res)
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
+    pub async fn batch_receive_message(
+        &self,
+        num_of_messages: i32,
+        wait_seconds: Option<u32>,
+    ) -> Result<Vec<MessageReceiveResponse>> {
+        let resource = wait_seconds.map_or_else(
+            || {
+                format!(
+                    "/queues/{}/messages?numOfMessages={}",
+                    self.name, num_of_messages
+                )
+            },
+            |w| {
+                format!(
+                    "/queues/{}/messages?numOfMessages={}&waitseconds={}",
+                    self.name, num_of_messages, w
+                )
+            },
+        );
+        let (status_code, v) = self
+            .client
+            .request(&resource, "GET", "application/xml", "")
+            .await?;
+        if status_code.is_success() {
+            let res: MessageBatchReceiveResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
+            Ok(res.messages)
         } else {
             let res: ErrorResponse =
                 serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;

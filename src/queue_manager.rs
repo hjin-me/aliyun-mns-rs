@@ -30,6 +30,49 @@ pub struct QueueAttribute {
     #[serde(rename = "LastModifyTime")]
     pub last_modify_time: i64, //    `xml:"LastModifyTime,omitempty" json:"last_modify_time,omitempty"`
 }
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CreateQueueRequest {
+    pub queue_name: String,
+    pub delay_seconds: Option<i32>,
+    pub maximum_message_size: Option<i32>,
+    pub message_retention_period: Option<i32>,
+    pub visibility_timeout: Option<i32>,
+    pub polling_wait_seconds: Option<i32>,
+    pub logging_enabled: Option<bool>,
+}
+impl CreateQueueRequest {
+    fn to_xml(&self) -> String {
+        let mut s = String::new();
+        s.push_str("<Queue>");
+        s.push_str(&format!("<QueueName>{}</QueueName>", self.queue_name));
+        if let Some(v) = self.delay_seconds {
+            s.push_str(&format!("<DelaySeconds>{v}</DelaySeconds>"));
+        }
+        if let Some(v) = self.maximum_message_size {
+            s.push_str(&format!("<MaximumMessageSize>{v}</MaximumMessageSize>"));
+        }
+        if let Some(v) = self.message_retention_period {
+            s.push_str(&format!(
+                "<MessageRetentionPeriod>{v}</MessageRetentionPeriod>"
+            ));
+        }
+        if let Some(v) = self.visibility_timeout {
+            s.push_str(&format!("<VisibilityTimeout>{v}</VisibilityTimeout>"));
+        }
+        if let Some(v) = self.polling_wait_seconds {
+            s.push_str(&format!("<PollingWaitSeconds>{v}</PollingWaitSeconds>"));
+        }
+        if let Some(v) = self.logging_enabled {
+            let v = match v {
+                true => "True",
+                false => "False",
+            };
+            s.push_str(&format!("<LoggingEnabled>{v}</LoggingEnabled>"));
+        }
+        s.push_str("</Queue>");
+        s
+    }
+}
 
 pub struct QueueManager {
     client: Client,
@@ -56,43 +99,37 @@ impl QueueManager {
     //     }
     // }
     //
-    // pub async fn create_queue(&self, q: &Queue) -> Result<()> {
-    //     let (status_code, v) = self
-    //         .client
-    //         .request(
-    //             &format!("/queues/{}", q.name),
-    //             "PUT",
-    //             "application/xml",
-    //             &serde_xml_rs::to_string(&q).map_err(SerializeMessageFailed)?,
-    //         )
-    //         .await?;
-    //     if status_code.is_success() {
-    //         Ok(())
-    //     } else {
-    //         let res: ErrorResponse =
-    //             serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
-    //         Err(res.into())
-    //     }
-    // }
-    //
-    // pub async fn delete_queue(&self, name: &str) -> Result<()> {
-    //     let (status_code, v) = self
-    //         .client
-    //         .request(
-    //             &format!("/queues/{}", name),
-    //             "DELETE",
-    //             "application/xml",
-    //             "",
-    //         )
-    //         .await?;
-    //     if status_code.is_success() {
-    //         Ok(())
-    //     } else {
-    //         let res: ErrorResponse =
-    //             serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
-    //         Err(res.into())
-    //     }
-    // }
+    pub async fn create_queue(&self, q: &CreateQueueRequest) -> Result<()> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!("/queues/{}", q.queue_name),
+                "PUT",
+                "application/xml",
+                &q.to_xml(),
+            )
+            .await?;
+        if status_code.is_success() {
+            Ok(())
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
+    pub async fn delete_queue(&self, name: &str) -> Result<()> {
+        let (status_code, v) = self
+            .client
+            .request(&format!("/queues/{name}"), "DELETE", "application/xml", "")
+            .await?;
+        if status_code.is_success() {
+            Ok(())
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
 
     pub async fn get_queue_attributes(&self, queue: &str) -> Result<QueueAttribute> {
         let (status_code, v) = self
@@ -117,16 +154,19 @@ mod test {
     use super::*;
 
     #[tokio::test]
-    async fn test_get_queue_attributes() {
+    async fn test_queue_manager() {
         let c = Client::new(
             &std::env::var("MNS_ENDPOINT").unwrap(),
             &std::env::var("MNS_ID").unwrap(),
             &std::env::var("MNS_SEC").unwrap(),
         );
         let qm = QueueManager::new(&c);
-        dbg!(qm
-            .get_queue_attributes(&std::env::var("MNS_QUEUE").unwrap())
-            .await
-            .unwrap());
+        qm.create_queue(&CreateQueueRequest {
+            queue_name: "sstest".to_string(),
+            ..CreateQueueRequest::default()
+        })
+        .await
+        .unwrap();
+        dbg!(qm.get_queue_attributes("sstest").await.unwrap());
     }
 }

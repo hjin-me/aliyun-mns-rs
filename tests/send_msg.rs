@@ -32,7 +32,6 @@ async fn test_send_msg() {
         .unwrap());
 
     dbg!(q.receive_message(None).await.unwrap());
-
     let r = q
         .send_message(&MessageSendRequest {
             message_body: "aa".to_string(),
@@ -42,4 +41,5 @@ async fn test_send_msg() {
         .await
         .unwrap();
     dbg!(r);
+    dbg!(q.batch_receive_message(10, None).await.unwrap());
 }
