@@ -22,6 +22,23 @@ pub struct MessageSendRequest {
     #[serde(rename = "Priority")]
     pub priority: Option<u8>,
 }
+impl MessageSendRequest {
+    pub fn to_xml(&self) -> String {
+        let delay_seconds = self.delay_seconds.map_or_else(
+            || "".to_string(),
+            |v| format!("<DelaySeconds>{v}</DelaySeconds>"),
+        );
+        let priority = self
+            .priority
+            .map_or_else(|| "".to_string(), |v| format!("<Priority>{v}</Priority>"));
+        format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Message><MessageBody><![CDATA[{}]]></MessageBody>{}{}</Message>",
+            self.message_body,
+            delay_seconds,
+            priority
+        )
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Message")]
@@ -113,18 +130,13 @@ impl Queue {
     }
 
     pub async fn send_message(&self, m: &MessageSendRequest) -> Result<MessageSendResponse> {
-        let m = MessageSendRequest {
-            message_body: m.message_body.clone(),
-            delay_seconds: m.delay_seconds.or(Some(0)),
-            priority: m.priority.or(Some(8)),
-        };
         let (status_code, v) = self
             .client
             .request(
                 &format!("/queues/{}/messages", self.name),
                 "POST",
                 "application/xml",
-                &serde_xml_rs::to_string(&m).map_err(SerializeMessageFailed)?,
+                &m.to_xml(),
             )
             .await?;
         if status_code.is_success() {
@@ -233,6 +245,27 @@ impl Queue {
             Err(res.into())
         }
     }
+
+    pub async fn peek_message(&self) -> Result<MessageReceiveResponse> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!("/queues/{}/messages?peekonly=true", self.name),
+                "GET",
+                "application/xml",
+                "",
+            )
+            .await?;
+        if status_code.is_success() {
+            let res: MessageReceiveResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
+            Ok(res)
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -252,21 +285,19 @@ mod test {
         let reserialized_item = to_string(&m).unwrap();
         assert_eq!(src, reserialized_item);
 
-        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody>aa</MessageBody><DelaySeconds /><Priority /></Message>"#;
+        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody><![CDATA[aa]]></MessageBody></Message>"#;
 
         let m = MessageSendRequest {
             message_body: "aa".to_string(),
             delay_seconds: None,
             priority: None,
         };
-        let reserialized_item = to_string(&m).unwrap();
-        assert_eq!(src, reserialized_item);
+        assert_eq!(src, m.to_xml());
 
-        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody></MessageBody><DelaySeconds /><Priority /></Message>"#;
+        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody><![CDATA[]]></MessageBody></Message>"#;
 
         let m = MessageSendRequest::default();
-        let reserialized_item = to_string(&m).unwrap();
-        assert_eq!(src, reserialized_item);
+        assert_eq!(src, m.to_xml());
     }
 
     #[tokio::test]
@@ -279,9 +310,9 @@ mod test {
         let q = Queue::new(&std::env::var("MNS_QUEUE").unwrap(), &c);
         let r = q
             .send_message(&MessageSendRequest {
-                message_body: "aa".to_string(),
-                delay_seconds: Some(1),
-                priority: Some(9),
+                message_body: "<aa href='abc'>".to_string(),
+                delay_seconds: None,
+                priority: Some(1),
             })
             .await
             .unwrap();
