@@ -152,17 +152,16 @@ impl QueueManager {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::devtool::{get_client, get_conf};
 
     #[tokio::test]
     async fn test_queue_manager() {
-        let c = Client::new(
-            &std::env::var("MNS_ENDPOINT").unwrap(),
-            &std::env::var("MNS_ID").unwrap(),
-            &std::env::var("MNS_SEC").unwrap(),
-        );
+        let conf = get_conf();
+        let c = get_client();
+
         let qm = QueueManager::new(&c);
         qm.create_queue(&CreateQueueRequest {
-            queue_name: "sstest".to_string(),
+            queue_name: conf.queue,
             ..CreateQueueRequest::default()
         })
         .await

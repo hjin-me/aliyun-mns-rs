@@ -1,6 +1,7 @@
 use crate::queue::ErrorResponse;
 use thiserror::Error;
 
+// https://help.aliyun.com/document_detail/27501.html
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("sign message failed")]
