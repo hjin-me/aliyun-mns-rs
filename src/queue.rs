@@ -326,11 +326,6 @@ impl Queue {
     }
 }
 
-impl Queue {
-    fn consumer(&self, opt: ConsumeOptions) -> Consumer {
-        Consumer::new(self.clone(), opt)
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
