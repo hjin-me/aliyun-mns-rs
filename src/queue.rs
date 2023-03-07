@@ -8,13 +8,15 @@ use crate::options::ConsumeOptions;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
+/// 消息操作 API
+/// https://help.aliyun.com/document_detail/140735.html
 #[derive(Debug, Clone)]
 pub struct Queue {
     pub name: String,
     client: Client,
 }
 
-// https://help.aliyun.com/document_detail/35134.html#section-exm-22o-0hw
+/// https://help.aliyun.com/document_detail/35134.html#section-exm-22o-0hw
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendRequest {
@@ -43,7 +45,7 @@ impl MessageSendRequest {
     }
 }
 
-// https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv
+/// https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendResponse {
@@ -70,7 +72,7 @@ struct MessageBatchSendResponse {
     pub messages: Vec<MessageSendResponse>,
 }
 
-// https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv
+/// https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageReceiveResponse {
@@ -101,7 +103,7 @@ pub struct MessageBatchReceiveResponse {
     pub messages: Vec<MessageReceiveResponse>,
 }
 
-// https://help.aliyun.com/document_detail/35142.html#section-qa7-cmp-6xd
+/// https://help.aliyun.com/document_detail/35142.html#section-qa7-cmp-6xd
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "ChangeVisibility")]
 pub struct MessageVisibilityChangeResponse {
@@ -111,8 +113,8 @@ pub struct MessageVisibilityChangeResponse {
     next_visible_time: i64,
 }
 
-// 当您访问消息服务MNS出错时，消息服务MNS会返回一个合适的3xx、4xx或5xx的HTTP状态码，以及一个text或xml格式的消息体
-// https://help.aliyun.com/document_detail/27500.html
+/// 当您访问消息服务MNS出错时，消息服务MNS会返回一个合适的3xx、4xx或5xx的HTTP状态码，以及一个text或xml格式的消息体
+/// https://help.aliyun.com/document_detail/27500.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Error")]
 pub struct ErrorResponse {
@@ -144,8 +146,8 @@ impl Queue {
         }
     }
 
-    // 调用SendMessage接口发送消息到指定的队列
-    // https://help.aliyun.com/document_detail/35134.html
+    /// 调用SendMessage接口发送消息到指定的队列
+    /// https://help.aliyun.com/document_detail/35134.html
     pub async fn send_message(&self, m: &MessageSendRequest) -> Result<MessageSendResponse> {
         let (status_code, v) = self
             .client
@@ -167,6 +169,8 @@ impl Queue {
         }
     }
 
+    /// 暂时不要使用
+    /// 消息批量发送的时候，部分消息失败的异常没有处理
     pub async fn batch_send_messages(
         &self,
         ms: &Vec<MessageSendRequest>,
@@ -191,8 +195,8 @@ impl Queue {
         }
     }
 
-    // 调用ReceiveMessage接口消费队列中的消息
-    // https://help.aliyun.com/document_detail/35136.html
+    /// 调用ReceiveMessage接口消费队列中的消息
+    /// https://help.aliyun.com/document_detail/35136.html
     pub async fn receive_message(
         &self,
         wait_seconds: Option<i32>,
@@ -215,6 +219,8 @@ impl Queue {
             Err(res.into())
         }
     }
+    /// 暂时不要使用
+    /// 批量处理时，部分消息失败的异常没有处理
     pub async fn batch_receive_message(
         &self,
         num_of_messages: i32,
@@ -248,8 +254,8 @@ impl Queue {
             Err(res.into())
         }
     }
-    // 调用DeleteMessage接口删除已经被消费过的消息
-    // https://help.aliyun.com/document_detail/35138.html
+    /// 调用DeleteMessage接口删除已经被消费过的消息
+    /// https://help.aliyun.com/document_detail/35138.html
     pub async fn delete_message(&self, receipt_handle: &str) -> Result<()> {
         let (status_code, v) = self
             .client
@@ -272,8 +278,8 @@ impl Queue {
         }
     }
 
-    // 调用ChangeMessageVisibility接口，修改被消费过并且还处于Inactive状态的消息与其下次可被消费的时间间隔
-    // https://help.aliyun.com/document_detail/35142.html
+    /// 调用ChangeMessageVisibility接口，修改被消费过并且还处于Inactive状态的消息与其下次可被消费的时间间隔
+    /// https://help.aliyun.com/document_detail/35142.html
     pub async fn change_message_visibility(
         &self,
         receipt_handle: &str,
@@ -302,8 +308,8 @@ impl Queue {
         }
     }
 
-    // 调用PeekMessage接口查看消息
-    // https://help.aliyun.com/document_detail/35140.html
+    /// 调用PeekMessage接口查看消息
+    /// https://help.aliyun.com/document_detail/35140.html
     pub async fn peek_message(&self) -> Result<MessageReceiveResponse> {
         let (status_code, v) = self
             .client

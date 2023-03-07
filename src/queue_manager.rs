@@ -8,27 +8,27 @@ use serde::{Deserialize, Serialize};
 #[serde(rename = "Queue")]
 pub struct QueueAttribute {
     #[serde(rename = "QueueName")]
-    pub queue_name: String, //   `xml:"QueueName,omitempty" json:"queue_name,omitempty"`
+    pub queue_name: String,
     #[serde(rename = "DelaySeconds")]
-    pub delay_seconds: i32, //    `xml:"DelaySeconds,omitempty" json:"delay_seconds,omitempty"`
+    pub delay_seconds: i32,
     #[serde(rename = "MaximumMessageSize")]
-    pub maximum_message_size: i32, //    `xml:"MaximumMessageSize,omitempty" json:"maximum_message_size,omitempty"`
+    pub maximum_message_size: i32,
     #[serde(rename = "MessageRetentionPeriod")]
-    pub message_retention_period: i32, //    `xml:"MessageRetentionPeriod,omitempty" json:"message_retention_period,omitempty"`
+    pub message_retention_period: i32,
     #[serde(rename = "VisibilityTimeout")]
-    pub visibility_timeout: i32, //    `xml:"VisibilityTimeout,omitempty" json:"visibility_timeout,omitempty"`
+    pub visibility_timeout: i32,
     #[serde(rename = "PollingWaitSeconds")]
-    pub polling_wait_seconds: i32, //    `xml:"PollingWaitSeconds,omitempty" json:"polling_wait_secods,omitempty"`
+    pub polling_wait_seconds: i32,
     #[serde(rename = "ActiveMessages")]
-    pub active_messages: i64, //    `xml:"ActiveMessages,omitempty" json:"active_messages,omitempty"`
+    pub active_messages: i64,
     #[serde(rename = "InactiveMessages")]
-    pub inactive_messages: i64, //    `xml:"InactiveMessages,omitempty" json:"inactive_messages,omitempty"`
+    pub inactive_messages: i64,
     #[serde(rename = "DelayMessages")]
-    pub delay_messages: i64, //    `xml:"DelayMessages,omitempty" json:"delay_messages,omitempty"`
+    pub delay_messages: i64,
     #[serde(rename = "CreateTime")]
-    pub create_time: i64, //    `xml:"CreateTime,omitempty" json:"create_time,omitempty"`
+    pub create_time: i64,
     #[serde(rename = "LastModifyTime")]
-    pub last_modify_time: i64, //    `xml:"LastModifyTime,omitempty" json:"last_modify_time,omitempty"`
+    pub last_modify_time: i64,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateQueueRequest {
@@ -74,6 +74,9 @@ impl CreateQueueRequest {
     }
 }
 
+/// 队列管理实例
+/// https://help.aliyun.com/document_detail/140734.html
+#[derive(Debug, Clone)]
 pub struct QueueManager {
     client: Client,
 }

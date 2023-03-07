@@ -1,7 +1,10 @@
 use crate::queue::ErrorResponse;
 use thiserror::Error;
 
-// https://help.aliyun.com/document_detail/27501.html
+/// Aliyun MNS 错误码
+/// https://help.aliyun.com/document_detail/27501.html
+/// MNS 开头的是 MNS 服务端返回的错误信息
+/// 阿里云好多错误码单词拼写错误，这里做了映射处理
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("sign message failed")]
