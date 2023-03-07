@@ -24,8 +24,8 @@ jobs:
           cargo install cargo-sonar
           cargo clippy --message-format json > my-clippy-report.json
           cargo sonar --issues clippy --clippy-path my-clippy-report.json
-      - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+#      - name: Generate code coverage
+#        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
@@ -34,4 +34,4 @@ jobs:
         with:
           args: >
             -Dsonar.externalIssuesReportPaths=sonar-issues.json
-            -Dcommunity.rust.lcov.reportPaths=lcov.info
+#            -Dcommunity.rust.lcov.reportPaths=lcov.info
