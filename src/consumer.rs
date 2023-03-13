@@ -3,10 +3,11 @@ use crate::Queue;
 use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(feature = "tokio")]
+use tokio::sync::{Mutex, Semaphore};
 use tracing::warn;
 
-// TODO
 pub type DeliveryResult = Result<Option<Delivery>>;
 
 #[derive(Debug, Clone)]
@@ -82,35 +83,43 @@ impl Consumer {
         }
     }
 
-    pub fn set_delegate<D: ConsumerDelegate + 'static>(&self, delegate: D) {
-        let mut inner = self.inner.lock().unwrap();
+    #[cfg(feature = "tokio")]
+    pub async fn set_delegate<D: ConsumerDelegate + 'static>(&self, delegate: D) {
+        let mut inner = self.inner.lock().await;
         inner.delegate = Some(Arc::new(Box::new(delegate)));
     }
 
     #[cfg(feature = "tokio")]
-    fn run(&self) {
+    pub fn run(&self) {
         let c = self.clone();
         tokio::spawn(async move {
+            // let semaphore = Semaphore::new(3);
+            let semaphore = Arc::new(Semaphore::new(3));
             loop {
-                let m = match c.queue.receive_message(Some(30)).await {
-                    Ok(m) => m,
-                    Err(e) => {
-                        warn!("receive message error, {:?}", e);
-                        continue;
+                let c = c.clone();
+                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                tokio::spawn(async move {
+                    let _permit = permit;
+                    let m = match c.queue.receive_message(Some(30)).await {
+                        Ok(m) => m,
+                        Err(e) => {
+                            warn!("receive message error, {:?}", e);
+                            return;
+                        }
+                    };
+                    let d = Delivery {
+                        data: m.message_body.into_bytes(),
+                        receipt_handle: m.receipt_handle,
+                        next_visible_time: m.next_visible_time,
+                        queue: c.queue.clone(),
+                        auto_ack: c.options.auto_ack,
+                    };
+                    let inner = c.inner.lock().await;
+                    if let Some(delegate) = inner.delegate.as_ref() {
+                        let delegate = delegate.clone();
+                        delegate.on_new_delivery(Ok(Some(d))).await;
                     }
-                };
-                let d = Delivery {
-                    data: m.message_body.into_bytes(),
-                    receipt_handle: m.receipt_handle,
-                    next_visible_time: m.next_visible_time,
-                    queue: c.queue.clone(),
-                    auto_ack: c.options.auto_ack,
-                };
-                let inner = c.inner.lock().unwrap();
-                if let Some(delegate) = inner.delegate.as_ref() {
-                    let delegate = delegate.clone();
-                    tokio::spawn(delegate.on_new_delivery(Ok(Some(d))));
-                }
+                });
             }
         });
     }
@@ -121,8 +130,6 @@ impl Queue {
         Consumer::new(self.clone(), opt)
     }
 }
-
-struct QueueWrapper {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConsumerState {
