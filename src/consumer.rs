@@ -1,5 +1,7 @@
-//!
 //! Consumer
+//! 参考 Lapin 的 Consumer 实现，使用 tokio 进行异步处理
+//!
+//! # Example
 //! ```rust
 //! use mns::Client;
 //! use mns::Queue;
@@ -9,7 +11,7 @@
 //! async fn main() {
 //!     let client = Client::new("https://xxx.mns.cn-hangzhou.aliyuncs.com", "your id", "your key");
 //!     let queue = Queue::new("your queue name", &client);
-//!      let consumer = Consumer::new(q, ConsumeOptions::default());
+//!     let consumer = Consumer::new(queue, ConsumeOptions::default());
 //!     consumer
 //!         .set_delegate(|msg: DeliveryResult| async move {
 //!             let m = msg.unwrap();
@@ -19,7 +21,7 @@
 //!     consumer.run();
 //! }
 //! ```
-use crate::options::ConsumeOptions;
+pub use crate::options::ConsumeOptions;
 use crate::Queue;
 use anyhow::Result;
 use std::future::Future;
@@ -38,7 +40,7 @@ pub struct Delivery {
     next_visible_time: i64,
     queue: Queue,
     // WIP
-    auto_ack: bool,
+    // auto_ack: bool,
 }
 
 impl Delivery {
@@ -115,32 +117,33 @@ impl Consumer {
         let c = self.clone();
         tokio::spawn(async move {
             // let semaphore = Semaphore::new(3);
-            let semaphore = Arc::new(Semaphore::new(3));
+            let semaphore = Arc::new(Semaphore::new(c.options.prefetch_count as usize));
             loop {
                 let c = c.clone();
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
-                tokio::spawn(async move {
-                    let _permit = permit;
-                    let m = match c.queue.receive_message(Some(30)).await {
-                        Ok(m) => m,
-                        Err(e) => {
-                            warn!("receive message error, {:?}", e);
-                            return;
-                        }
-                    };
-                    let d = Delivery {
-                        data: m.message_body.into_bytes(),
-                        receipt_handle: m.receipt_handle,
-                        next_visible_time: m.next_visible_time,
-                        queue: c.queue.clone(),
-                        auto_ack: c.options.auto_ack,
-                    };
-                    let inner = c.inner.lock().await;
-                    if let Some(delegate) = inner.delegate.as_ref() {
-                        let delegate = delegate.clone();
-                        delegate.on_new_delivery(Ok(Some(d))).await;
+                let m = match c.queue.receive_message(Some(30)).await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        warn!("receive message error, {:?}", e);
+                        return;
                     }
-                });
+                };
+
+                let d = Delivery {
+                    data: m.message_body.into_bytes(),
+                    receipt_handle: m.receipt_handle,
+                    next_visible_time: m.next_visible_time,
+                    queue: c.queue.clone(),
+                    // auto_ack: c.options.auto_ack,
+                };
+                let inner = c.inner.lock().await;
+                if let Some(delegate) = inner.delegate.as_ref() {
+                    let delegate = delegate.clone();
+                    tokio::spawn(async move {
+                        let _permit = permit;
+                        delegate.on_new_delivery(Ok(Some(d))).await;
+                    });
+                }
             }
         });
     }

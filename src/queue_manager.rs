@@ -1,3 +1,6 @@
+//! 队列管理实例
+//! https://help.aliyun.com/document_detail/140734.html
+
 use crate::client::Client;
 use crate::error::Error::{DeserializeErrorResponseFailed, DeserializeResponseFailed};
 use crate::error::Result;

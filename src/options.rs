@@ -1,7 +1,17 @@
 use serde::{Deserialize, Serialize};
-#[derive(Copy, Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ConsumeOptions {
-    // WIP
+    // #[serde(default)]
+    // pub auto_ack: bool,
     #[serde(default)]
-    pub auto_ack: bool,
+    pub prefetch_count: u16,
+}
+
+impl Default for ConsumeOptions {
+    fn default() -> Self {
+        Self {
+            // auto_ack: false,
+            prefetch_count: 1,
+        }
+    }
 }

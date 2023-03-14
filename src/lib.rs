@@ -1,4 +1,5 @@
 //! Aliyun Message Service (MNS) SDK for Rust
+//! ![docs.rs](https://img.shields.io/docsrs/aliyun-mns?style=for-the-badge)
 //!
 //! # Example
 //! ```rust
@@ -13,7 +14,7 @@
 //!         message_body: "aa".to_string(),
 //!         delay_seconds: Some(1),
 //!         priority: Some(9),
-//!     }).await;
+//!     }).await.unwrap();
 //! }
 //! ```
 pub mod client;

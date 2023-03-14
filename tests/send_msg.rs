@@ -32,16 +32,18 @@ async fn test_send_msg() {
     let r = dbg!(q
         .send_message(&MessageSendRequest {
             message_body: "aa".to_string(),
-            delay_seconds: Some(1),
+            delay_seconds: None,
             priority: Some(9),
         })
         .await
         .unwrap());
 
-    dbg!(q
-        .delete_message(r.receipt_handle.unwrap().as_str())
-        .await
-        .unwrap());
+    // tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // dbg!(q
+    //     .delete_message(r.receipt_handle.unwrap().as_str())
+    //     .await
+    //     .unwrap());
 
     dbg!(q.receive_message(None).await.unwrap());
     let r = q

@@ -1,3 +1,5 @@
+//! 消息操作 API，包括消息的发送、接收、删除、修改可见性等操作
+//! <https://help.aliyun.com/document_detail/140735.html>
 use crate::client::Client;
 use crate::consumer::Consumer;
 use crate::error::Error::{
@@ -172,6 +174,7 @@ impl Queue {
 
     /// 暂时不要使用
     /// 消息批量发送的时候，部分消息失败的异常没有处理
+    /// TODO
     pub async fn batch_send_messages(
         &self,
         ms: &Vec<MessageSendRequest>,
@@ -229,6 +232,7 @@ impl Queue {
     }
     /// 暂时不要使用
     /// 批量处理时，部分消息失败的异常没有处理
+    /// TODO
     pub async fn batch_receive_message(
         &self,
         num_of_messages: i32,
