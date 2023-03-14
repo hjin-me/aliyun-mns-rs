@@ -1,3 +1,24 @@
+//!
+//! Consumer
+//! ```rust
+//! use mns::Client;
+//! use mns::Queue;
+//! use mns::queue::MessageSendRequest;
+//! use mns::consumer::{Consumer, DeliveryResult, ConsumeOptions};
+//! #[tokio::main]
+//! async fn main() {
+//!     let client = Client::new("https://xxx.mns.cn-hangzhou.aliyuncs.com", "your id", "your key");
+//!     let queue = Queue::new("your queue name", &client);
+//!      let consumer = Consumer::new(q, ConsumeOptions::default());
+//!     consumer
+//!         .set_delegate(|msg: DeliveryResult| async move {
+//!             let m = msg.unwrap();
+//!             dbg!(m);
+//!         })
+//!         .await;
+//!     consumer.run();
+//! }
+//! ```
 use crate::options::ConsumeOptions;
 use crate::Queue;
 use anyhow::Result;

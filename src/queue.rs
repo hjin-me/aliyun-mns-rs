@@ -5,6 +5,7 @@ use crate::error::Error::{
 };
 use crate::error::Result;
 use crate::options::ConsumeOptions;
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -17,7 +18,7 @@ pub struct Queue {
 }
 
 /// https://help.aliyun.com/document_detail/35134.html#section-exm-22o-0hw
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendRequest {
     #[serde(rename = "MessageBody")]
@@ -27,21 +28,20 @@ pub struct MessageSendRequest {
     #[serde(rename = "Priority")]
     pub priority: Option<u8>,
 }
-impl MessageSendRequest {
-    pub fn to_xml(&self) -> String {
-        let delay_seconds = self.delay_seconds.map_or_else(
-            || "".to_string(),
-            |v| format!("<DelaySeconds>{v}</DelaySeconds>"),
-        );
-        let priority = self
-            .priority
-            .map_or_else(|| "".to_string(), |v| format!("<Priority>{v}</Priority>"));
-        format!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Message><MessageBody><![CDATA[{}]]></MessageBody>{}{}</Message>",
-            self.message_body,
-            delay_seconds,
-            priority
-        )
+impl Serialize for MessageSendRequest {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut msg = serializer.serialize_struct("Message", 3)?;
+        msg.serialize_field("MessageBody", &self.message_body)?;
+        if let Some(d) = self.delay_seconds {
+            msg.serialize_field("DelaySeconds", &d)?;
+        }
+        if let Some(p) = self.priority {
+            msg.serialize_field("Priority", &p)?;
+        }
+        msg.end()
     }
 }
 
@@ -155,7 +155,8 @@ impl Queue {
                 &format!("/queues/{}/messages", self.name),
                 "POST",
                 "application/xml",
-                &m.to_xml(),
+                &serde_xml_rs::to_string(m).unwrap(),
+                Some(5),
             )
             .await?;
         if status_code.is_success() {
@@ -182,6 +183,7 @@ impl Queue {
                 "POST",
                 "application/xml",
                 &serde_xml_rs::to_string(&ms).map_err(SerializeMessageFailed)?,
+                Some(5),
             )
             .await?;
         if status_code.is_success() {
@@ -207,7 +209,13 @@ impl Queue {
         );
         let (status_code, v) = self
             .client
-            .request(&resource, "GET", "application/xml", "")
+            .request(
+                &resource,
+                "GET",
+                "application/xml",
+                "",
+                wait_seconds.map(|t| t + 1),
+            )
             .await?;
         if status_code.is_success() {
             let res: MessageReceiveResponse =
@@ -242,7 +250,13 @@ impl Queue {
         );
         let (status_code, v) = self
             .client
-            .request(&resource, "GET", "application/xml", "")
+            .request(
+                &resource,
+                "GET",
+                "application/xml",
+                "",
+                wait_seconds.map(|t| t as i32 + 1),
+            )
             .await?;
         if status_code.is_success() {
             let res: MessageBatchReceiveResponse =
@@ -267,6 +281,7 @@ impl Queue {
                 "DELETE",
                 "application/xml",
                 "",
+                Some(5),
             )
             .await?;
         if status_code.is_success() {
@@ -295,6 +310,7 @@ impl Queue {
                 "PUT",
                 "application/xml",
                 "",
+                Some(5),
             )
             .await?;
         if status_code.is_success() {
@@ -318,6 +334,7 @@ impl Queue {
                 "GET",
                 "application/xml",
                 "",
+                Some(5),
             )
             .await?;
         if status_code.is_success() {
@@ -350,19 +367,19 @@ mod test {
         let reserialized_item = to_string(&m).unwrap();
         assert_eq!(src, reserialized_item);
 
-        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody><![CDATA[aa]]></MessageBody></Message>"#;
+        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody>aa</MessageBody></Message>"#;
 
         let m = MessageSendRequest {
             message_body: "aa".to_string(),
             delay_seconds: None,
             priority: None,
         };
-        assert_eq!(src, m.to_xml());
+        assert_eq!(src, to_string(&m).unwrap());
 
-        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody><![CDATA[]]></MessageBody></Message>"#;
+        let src = r#"<?xml version="1.0" encoding="UTF-8"?><Message><MessageBody></MessageBody></Message>"#;
 
         let m = MessageSendRequest::default();
-        assert_eq!(src, m.to_xml());
+        assert_eq!(src, to_string(&m).unwrap());
     }
 
     #[tokio::test]

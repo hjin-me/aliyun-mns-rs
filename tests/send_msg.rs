@@ -37,6 +37,7 @@ async fn test_send_msg() {
         })
         .await
         .unwrap());
+
     dbg!(q
         .delete_message(r.receipt_handle.unwrap().as_str())
         .await

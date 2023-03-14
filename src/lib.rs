@@ -2,10 +2,14 @@
 //!
 //! # Example
 //! ```rust
+//! use mns::Client;
+//! use mns::Queue;
+//! use mns::queue::MessageSendRequest;
+//! #[tokio::main]
 //! async fn main() {
-//!     let client = aliyun_mns::Client::new("https://xxx.mns.cn-hangzhou.aliyuncs.com", "your id", "your key");
-//!     let queue = aliyun_mns::Queue::new("your queue name", &client);
-//!     queue.send_message(&aliyun_mns::queue::MessageSendRequest {
+//!     let client = Client::new("https://xxx.mns.cn-hangzhou.aliyuncs.com", "your id", "your key");
+//!     let queue = Queue::new("your queue name", &client);
+//!     queue.send_message(&MessageSendRequest {
 //!         message_body: "aa".to_string(),
 //!         delay_seconds: Some(1),
 //!         priority: Some(9),

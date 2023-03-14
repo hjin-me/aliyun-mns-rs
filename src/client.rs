@@ -29,6 +29,7 @@ impl Client {
         method: &str,
         content_type: &str,
         body: &str,
+        timeout_sec: Option<i32>,
     ) -> Result<(StatusCode, Vec<u8>)> {
         let date = gmt_now()?;
         let m = {
@@ -59,7 +60,9 @@ impl Client {
             .header("Content-Type", content_type)
             .header("Content-Md5", m)
             .header("x-mns-version", "2015-06-06")
-            .timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(
+                timeout_sec.unwrap_or(5) as u64
+            ))
             .body(body.to_string())
             .send()
             .await?;
@@ -152,6 +155,7 @@ Thu, 02 Feb 2023 02:09:48 GMT
             "POST",
             "application/xml",
             "<Message><MessageBody>hello &lt;&#34;aliyun-mns-go-sdk&#34;&gt;</MessageBody><DelaySeconds>0</DelaySeconds><Priority>8</Priority></Message>",
+            Some(5),
         )
             .await
             .unwrap();
