@@ -1,25 +1,25 @@
 //! 消息操作 API，包括消息的发送、接收、删除、修改可见性等操作
 //! <https://help.aliyun.com/document_detail/140735.html>
 use crate::client::Client;
-use crate::consumer::Consumer;
 use crate::error::Error::{
     DeserializeErrorResponseFailed, DeserializeResponseFailed, SerializeMessageFailed,
 };
 use crate::error::Result;
-use crate::options::ConsumeOptions;
+use async_trait::async_trait;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 /// 消息操作 API
-/// https://help.aliyun.com/document_detail/140735.html
+/// <https://help.aliyun.com/document_detail/140735.html>
 #[derive(Debug, Clone)]
 pub struct Queue {
+    /// 队列名称
     pub name: String,
     client: Client,
 }
 
-/// https://help.aliyun.com/document_detail/35134.html#section-exm-22o-0hw
+/// <https://help.aliyun.com/document_detail/35134.html#section-exm-22o-0hw>
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendRequest {
@@ -47,7 +47,7 @@ impl Serialize for MessageSendRequest {
     }
 }
 
-/// https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv
+/// <https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageSendResponse {
@@ -74,7 +74,7 @@ struct MessageBatchSendResponse {
     pub messages: Vec<MessageSendResponse>,
 }
 
-/// https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv
+/// <https://help.aliyun.com/document_detail/35134.html#section-obk-m2u-mzv>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Message")]
 pub struct MessageReceiveResponse {
@@ -105,7 +105,7 @@ pub struct MessageBatchReceiveResponse {
     pub messages: Vec<MessageReceiveResponse>,
 }
 
-/// https://help.aliyun.com/document_detail/35142.html#section-qa7-cmp-6xd
+/// <https://help.aliyun.com/document_detail/35142.html#section-qa7-cmp-6xd>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "ChangeVisibility")]
 pub struct MessageVisibilityChangeResponse {
@@ -116,7 +116,7 @@ pub struct MessageVisibilityChangeResponse {
 }
 
 /// 当您访问消息服务MNS出错时，消息服务MNS会返回一个合适的3xx、4xx或5xx的HTTP状态码，以及一个text或xml格式的消息体
-/// https://help.aliyun.com/document_detail/27500.html
+/// <https://help.aliyun.com/document_detail/27500.html>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "Error")]
 pub struct ErrorResponse {
@@ -140,6 +140,30 @@ impl Display for ErrorResponse {
     }
 }
 
+#[async_trait]
+pub trait QueueOperation {
+    async fn send_message(&self, m: &MessageSendRequest) -> Result<MessageSendResponse>;
+    async fn receive_message(&self, wait_seconds: Option<i32>) -> Result<MessageReceiveResponse>;
+    async fn delete_message(&self, receipt_handle: &str) -> Result<()>;
+    async fn change_message_visibility(
+        &self,
+        receipt_handle: &str,
+        visibility_timeout: i32,
+    ) -> Result<MessageVisibilityChangeResponse>;
+    async fn peek_message(&self) -> Result<MessageReceiveResponse>;
+
+    async fn batch_send_messages(
+        &self,
+        ms: &Vec<MessageSendRequest>,
+    ) -> Result<Vec<MessageSendResponse>>;
+
+    async fn batch_receive_message(
+        &self,
+        num_of_messages: i32,
+        wait_seconds: Option<u32>,
+    ) -> Result<Vec<MessageReceiveResponse>>;
+}
+
 impl Queue {
     pub fn new(name: &str, c: &Client) -> Self {
         Self {
@@ -147,10 +171,13 @@ impl Queue {
             client: c.clone(),
         }
     }
+}
 
+#[async_trait]
+impl QueueOperation for Queue {
     /// 调用SendMessage接口发送消息到指定的队列
-    /// https://help.aliyun.com/document_detail/35134.html
-    pub async fn send_message(&self, m: &MessageSendRequest) -> Result<MessageSendResponse> {
+    /// <https://help.aliyun.com/document_detail/35134.html>
+    async fn send_message(&self, m: &MessageSendRequest) -> Result<MessageSendResponse> {
         let (status_code, v) = self
             .client
             .request(
@@ -172,40 +199,9 @@ impl Queue {
         }
     }
 
-    /// 暂时不要使用
-    /// 消息批量发送的时候，部分消息失败的异常没有处理
-    /// TODO
-    pub async fn batch_send_messages(
-        &self,
-        ms: &Vec<MessageSendRequest>,
-    ) -> Result<Vec<MessageSendResponse>> {
-        let (status_code, v) = self
-            .client
-            .request(
-                &format!("/queues/{}/messages", self.name),
-                "POST",
-                "application/xml",
-                &serde_xml_rs::to_string(&ms).map_err(SerializeMessageFailed)?,
-                Some(5),
-            )
-            .await?;
-        if status_code.is_success() {
-            let res: MessageBatchSendResponse =
-                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
-            Ok(res.messages)
-        } else {
-            let res: ErrorResponse =
-                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
-            Err(res.into())
-        }
-    }
-
     /// 调用ReceiveMessage接口消费队列中的消息
-    /// https://help.aliyun.com/document_detail/35136.html
-    pub async fn receive_message(
-        &self,
-        wait_seconds: Option<i32>,
-    ) -> Result<MessageReceiveResponse> {
+    /// <https://help.aliyun.com/document_detail/35136.html>
+    async fn receive_message(&self, wait_seconds: Option<i32>) -> Result<MessageReceiveResponse> {
         let resource = wait_seconds.map_or_else(
             || format!("/queues/{}/messages", self.name),
             |w| format!("/queues/{}/messages?waitseconds={}", self.name, w),
@@ -230,10 +226,117 @@ impl Queue {
             Err(res.into())
         }
     }
+
+    /// 调用DeleteMessage接口删除已经被消费过的消息
+    /// <https://help.aliyun.com/document_detail/35138.html>
+    async fn delete_message(&self, receipt_handle: &str) -> Result<()> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!(
+                    "/queues/{}/messages?ReceiptHandle={}",
+                    self.name, receipt_handle
+                ),
+                "DELETE",
+                "application/xml",
+                "",
+                Some(5),
+            )
+            .await?;
+        if status_code.is_success() {
+            Ok(())
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
+    /// 调用ChangeMessageVisibility接口，修改被消费过并且还处于Inactive状态的消息与其下次可被消费的时间间隔
+    /// <https://help.aliyun.com/document_detail/35142.html>
+    async fn change_message_visibility(
+        &self,
+        receipt_handle: &str,
+        visibility_timeout: i32,
+    ) -> Result<MessageVisibilityChangeResponse> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!(
+                    "/queues/{}/messages?ReceiptHandle={}&VisibilityTimeout={}",
+                    self.name, receipt_handle, visibility_timeout
+                ),
+                "PUT",
+                "application/xml",
+                "",
+                Some(5),
+            )
+            .await?;
+        if status_code.is_success() {
+            let res: MessageVisibilityChangeResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
+            Ok(res)
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
+    /// 调用PeekMessage接口查看消息
+    /// <https://help.aliyun.com/document_detail/35140.html>
+    async fn peek_message(&self) -> Result<MessageReceiveResponse> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!("/queues/{}/messages?peekonly=true", self.name),
+                "GET",
+                "application/xml",
+                "",
+                Some(5),
+            )
+            .await?;
+        if status_code.is_success() {
+            let res: MessageReceiveResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
+            Ok(res)
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
+
+    /// 暂时不要使用
+    /// 消息批量发送的时候，部分消息失败的异常没有处理
+    /// TODO
+    async fn batch_send_messages(
+        &self,
+        ms: &Vec<MessageSendRequest>,
+    ) -> Result<Vec<MessageSendResponse>> {
+        let (status_code, v) = self
+            .client
+            .request(
+                &format!("/queues/{}/messages", self.name),
+                "POST",
+                "application/xml",
+                &serde_xml_rs::to_string(&ms).map_err(SerializeMessageFailed)?,
+                Some(5),
+            )
+            .await?;
+        if status_code.is_success() {
+            let res: MessageBatchSendResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
+            Ok(res.messages)
+        } else {
+            let res: ErrorResponse =
+                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
+            Err(res.into())
+        }
+    }
+
     /// 暂时不要使用
     /// 批量处理时，部分消息失败的异常没有处理
     /// TODO
-    pub async fn batch_receive_message(
+    async fn batch_receive_message(
         &self,
         num_of_messages: i32,
         wait_seconds: Option<u32>,
@@ -266,85 +369,6 @@ impl Queue {
             let res: MessageBatchReceiveResponse =
                 serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
             Ok(res.messages)
-        } else {
-            let res: ErrorResponse =
-                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
-            Err(res.into())
-        }
-    }
-    /// 调用DeleteMessage接口删除已经被消费过的消息
-    /// https://help.aliyun.com/document_detail/35138.html
-    pub async fn delete_message(&self, receipt_handle: &str) -> Result<()> {
-        let (status_code, v) = self
-            .client
-            .request(
-                &format!(
-                    "/queues/{}/messages?ReceiptHandle={}",
-                    self.name, receipt_handle
-                ),
-                "DELETE",
-                "application/xml",
-                "",
-                Some(5),
-            )
-            .await?;
-        if status_code.is_success() {
-            Ok(())
-        } else {
-            let res: ErrorResponse =
-                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
-            Err(res.into())
-        }
-    }
-
-    /// 调用ChangeMessageVisibility接口，修改被消费过并且还处于Inactive状态的消息与其下次可被消费的时间间隔
-    /// https://help.aliyun.com/document_detail/35142.html
-    pub async fn change_message_visibility(
-        &self,
-        receipt_handle: &str,
-        visibility_timeout: i32,
-    ) -> Result<MessageVisibilityChangeResponse> {
-        let (status_code, v) = self
-            .client
-            .request(
-                &format!(
-                    "/queues/{}/messages?ReceiptHandle={}&VisibilityTimeout={}",
-                    self.name, receipt_handle, visibility_timeout
-                ),
-                "PUT",
-                "application/xml",
-                "",
-                Some(5),
-            )
-            .await?;
-        if status_code.is_success() {
-            let res: MessageVisibilityChangeResponse =
-                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
-            Ok(res)
-        } else {
-            let res: ErrorResponse =
-                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;
-            Err(res.into())
-        }
-    }
-
-    /// 调用PeekMessage接口查看消息
-    /// https://help.aliyun.com/document_detail/35140.html
-    pub async fn peek_message(&self) -> Result<MessageReceiveResponse> {
-        let (status_code, v) = self
-            .client
-            .request(
-                &format!("/queues/{}/messages?peekonly=true", self.name),
-                "GET",
-                "application/xml",
-                "",
-                Some(5),
-            )
-            .await?;
-        if status_code.is_success() {
-            let res: MessageReceiveResponse =
-                serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeResponseFailed)?;
-            Ok(res)
         } else {
             let res: ErrorResponse =
                 serde_xml_rs::from_reader(v.as_slice()).map_err(DeserializeErrorResponseFailed)?;

@@ -16,6 +16,7 @@ name = "mns"
 
 [dependencies]
 anyhow = "1.0.68"
+async-trait = "0.1.68"
 base16ct = "0.2.0"
 base64 = "0.21.0"
 hmac = "0.12.1"

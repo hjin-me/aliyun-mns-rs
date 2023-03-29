@@ -22,6 +22,7 @@
 //! }
 //! ```
 pub use crate::options::ConsumeOptions;
+use crate::queue::QueueOperation;
 use crate::Queue;
 use anyhow::Result;
 use std::future::Future;

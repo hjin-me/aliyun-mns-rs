@@ -5,10 +5,10 @@
 //! ```rust
 //! use mns::Client;
 //! use mns::Queue;
-//! use mns::queue::MessageSendRequest;
+//! use mns::queue::{ MessageSendRequest, QueueOperation };
 //! #[tokio::main]
 //! async fn main() {
-//!     let client = Client::new("https://xxx.mns.cn-hangzhou.aliyuncs.com", "your id", "your key");
+//! let client = Client::new("https://xxx.mns.cn-hangzhou.aliyuncs.com", "your id", "your key");
 //!     let queue = Queue::new("your queue name", &client);
 //!     queue.send_message(&MessageSendRequest {
 //!         message_body: "aa".to_string(),
@@ -26,6 +26,8 @@ pub mod options;
 pub mod queue;
 pub mod queue_manager;
 
+/// 消息操作 API，包括消息的发送、接收、删除、修改可见性等操作
+/// <https://help.aliyun.com/document_detail/140735.html>
 pub type Queue = queue::Queue;
 pub type Client = client::Client;
 pub type QueueManager = queue_manager::QueueManager;
