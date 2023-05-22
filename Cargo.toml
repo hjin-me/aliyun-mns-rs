@@ -1,11 +1,12 @@
 [package]
 name = "aliyun-mns"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 description = "Aliyun MNS SDK for Rust"
 license = "MIT"
 repository = "https://github.com/hjin-me/aliyun-mns-rs"
 authors = ["HJin"]
+documentation = "https://docs.rs/aliyun-mns"
 keywords = ["aliyun", "mns"]
 exclude = ["tests/*"]
 
@@ -21,12 +22,12 @@ base16ct = "0.2.0"
 base64 = "0.21.0"
 hmac = "0.12.1"
 md-5 = "0.10.5"
-reqwest = "0.11.14"
+reqwest = { version = "0.11.14", default-features = false, features = ["rustls-tls", "json"] }
 serde = { version = "1.0.152", features = ["derive"] }
 serde-xml-rs = "0.6.0"
 sha1 = "0.10.5"
 thiserror = "1.0.38"
-time = { version = "0.3.17", features = ["formatting", "parsing", "serde", "macros"] }
+time = { version = "0.3.17", features = ["serde-human-readable", "macros"] }
 tokio = { version = "1.25.0", features = ["full"], optional = true }
 tracing = "0.1.37"
 

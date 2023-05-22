@@ -3,11 +3,9 @@
 
 ![docs.rs](https://img.shields.io/docsrs/aliyun-mns?style=for-the-badge)
 
-*WIP*
-
 ## TODO
 
-* [ ] Queue
+* [x] Queue
 * [ ] QueueManager
 * [ ] Topic
 * [ ] TopicManager
